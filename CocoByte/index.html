@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cocobyte 🦜</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2128;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --scanner: #388bfd;
+    --parser: #3fb950;
+    --semantic: #a371f7;
+    --coco: #f0883e;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    padding: 16px 28px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--surface);
+  }
+
+  #header-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    transition: color 0.3s;
+  }
+
+  header p {
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+
+  main {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── Editor Pane ── */
+  .editor-pane {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    padding: 20px;
+    gap: 12px;
+    overflow: hidden;
+  }
+
+  .editor-pane label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+  }
+
+  #examples {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 7px 10px;
+    font-size: 0.875rem;
+    cursor: pointer;
+    width: 100%;
+  }
+
+  #editor {
+    flex: 1;
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    resize: none;
+    outline: none;
+    tab-size: 2;
+    min-height: 300px;
+  }
+
+  #editor:focus {
+    border-color: var(--scanner);
+    box-shadow: 0 0 0 3px rgba(56, 139, 253, 0.15);
+  }
+
+  #run-btn {
+    background: var(--scanner);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 11px 24px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+  }
+
+  #run-btn:hover { background: #58a6ff; }
+  #run-btn:active { transform: scale(0.97); }
+
+  /* ── Output Pane ── */
+  .output-pane {
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    gap: 16px;
+    overflow: hidden;
+  }
+
+  /* ── Stepper ── */
+  .stepper {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .step-dot {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border: 1.5px solid var(--border);
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--surface);
+    white-space: nowrap;
+  }
+
+  .step-dot.active {
+    border-color: var(--step-color);
+    color: var(--step-color);
+    background: color-mix(in srgb, var(--step-color) 10%, var(--surface));
+  }
+
+  .step-dot.done {
+    border-color: var(--step-color);
+    color: var(--step-color);
+    opacity: 0.5;
+  }
+
+  .step-dot[data-panel="0"] { --step-color: var(--scanner); }
+  .step-dot[data-panel="1"] { --step-color: var(--parser); }
+  .step-dot[data-panel="2"] { --step-color: var(--semantic); }
+  .step-dot[data-panel="3"] { --step-color: var(--coco); }
+
+  /* ── Panels ── */
+  .panels {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .panel {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transform: translateY(12px);
+    transition: opacity 0.35s ease, transform 0.35s ease;
+    pointer-events: none;
+    overflow: auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+
+  .panel.visible {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: all;
+  }
+
+  .panel-header {
+    padding: 14px 18px 10px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    position: sticky;
+    top: 0;
+    background: var(--surface);
+    z-index: 1;
+  }
+
+  .panel-header .icon { font-size: 1.4rem; }
+
+  .panel-header .char-name {
+    font-weight: 700;
+    font-size: 1rem;
+  }
+
+  .panel-header .char-msg {
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+
+  .panel-body {
+    padding: 14px 18px;
+  }
+
+  /* Lexi accent */
+  #panel-scanner .panel-header { border-left: 3px solid var(--scanner); }
+  #panel-scanner .char-name { color: var(--scanner); }
+
+  /* Pascal accent */
+  #panel-parser .panel-header { border-left: 3px solid var(--parser); }
+  #panel-parser .char-name { color: var(--parser); }
+
+  /* Sage accent */
+  #panel-semantic .panel-header { border-left: 3px solid var(--semantic); }
+  #panel-semantic .char-name { color: var(--semantic); }
+
+  /* Output accent */
+  #panel-output .panel-header { border-left: 3px solid var(--coco); }
+  #panel-output .char-name { color: var(--coco); }
+
+  /* ── Token Table ── */
+  .token-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+  }
+
+  .token-table th {
+    text-align: left;
+    padding: 6px 10px;
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .token-table td {
+    padding: 5px 10px;
+    border-bottom: 1px solid rgba(48,54,61,0.5);
+  }
+
+  .token-table tr:last-child td { border-bottom: none; }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    font-weight: 600;
+  }
+
+  .badge-KEYWORD    { background: rgba(56,139,253,0.2); color: var(--scanner); }
+  .badge-IDENTIFIER { background: rgba(63,185,80,0.2); color: var(--parser); }
+  .badge-NUMBER     { background: rgba(163,113,247,0.2); color: var(--semantic); }
+  .badge-STRING     { background: rgba(240,136,62,0.2); color: var(--coco); }
+  .badge-OPERATOR   { background: rgba(139,148,158,0.2); color: var(--muted); }
+  .badge-LPAREN,
+  .badge-RPAREN,
+  .badge-COMMA      { background: rgba(139,148,158,0.15); color: var(--muted); }
+  .badge-EOF        { background: rgba(139,148,158,0.1); color: var(--muted); }
+
+  /* ── AST SVG ── */
+  #ast-container {
+    overflow: auto;
+    max-height: calc(100vh - 280px);
+  }
+
+  #ast-container svg {
+    display: block;
+    min-width: 100%;
+  }
+
+  /* ── Semantic ── */
+  .sem-ok {
+    background: rgba(63,185,80,0.12);
+    border: 1px solid rgba(63,185,80,0.4);
+    border-radius: 8px;
+    padding: 14px 16px;
+    color: var(--parser);
+    font-weight: 600;
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .sem-issue {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    font-size: 0.85rem;
+  }
+
+  .sem-issue.error {
+    background: rgba(248,81,73,0.1);
+    border: 1px solid rgba(248,81,73,0.35);
+  }
+
+  .sem-issue.warning {
+    background: rgba(210,153,34,0.1);
+    border: 1px solid rgba(210,153,34,0.35);
+  }
+
+  .sem-issue .badge-type { font-weight: 700; min-width: 60px; }
+  .sem-issue.error .badge-type { color: #f85149; }
+  .sem-issue.warning .badge-type { color: #d2993e; }
+  .sem-issue .line-num { color: var(--muted); font-size: 0.78rem; }
+
+  /* ── Output ── */
+  .output-lines {
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 0.88rem;
+    line-height: 1.8;
+    color: var(--coco);
+    white-space: pre;
+  }
+
+  .output-line::before {
+    content: '▸ ';
+    opacity: 0.5;
+  }
+
+  .output-error {
+    background: rgba(248,81,73,0.1);
+    border: 1px solid rgba(248,81,73,0.35);
+    border-radius: 8px;
+    padding: 12px 16px;
+    color: #f85149;
+    font-family: monospace;
+    font-size: 0.85rem;
+  }
+
+  .empty-msg {
+    color: var(--muted);
+    font-style: italic;
+    font-size: 0.88rem;
+  }
+
+  /* ── Nav Buttons ── */
+  .nav-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+  }
+
+  .nav-btn {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 8px 18px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .nav-btn:hover { border-color: var(--muted); }
+  .nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  #next-btn {
+    background: var(--surface2);
+    border-color: var(--scanner);
+    color: var(--scanner);
+  }
+
+  #next-btn:hover { background: rgba(56,139,253,0.12); }
+
+  /* ── Loading ── */
+  .loading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 0.88rem;
+    padding: 20px 0;
+  }
+
+  .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border);
+    border-top-color: var(--scanner);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+
+  /* ── Responsive ── */
+  @media (max-width: 820px) {
+    main { grid-template-columns: 1fr; }
+    .editor-pane { border-right: none; border-bottom: 1px solid var(--border); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span style="font-size:2rem">🦜</span>
+  <div>
+    <div id="header-title">Cocobyte</div>
+    <p>A simple interpreted language — built for learning</p>
+  </div>
+</header>
+
+<main>
+  <!-- ── Left: Editor ── -->
+  <section class="editor-pane">
+    <label>Load Example</label>
+    <select id="examples">
+      <option value="">— choose an example —</option>
+      <option value="hello">Hello World</option>
+      <option value="vars">Variables &amp; Math</option>
+      <option value="ifstmt">If Statement</option>
+      <option value="fib">Fibonacci (recursive)</option>
+      <option value="loop">Loop</option>
+      <option value="parrot">ASCII Parrot 🦜</option>
+    </select>
+
+    <label>Code Editor</label>
+    <textarea id="editor" spellcheck="false" placeholder="Write your Cocobyte code here...">squawk("Hello, World!")</textarea>
+
+    <button id="run-btn">&#9654; Run</button>
+  </section>
+
+  <!-- ── Right: Output ── -->
+  <section class="output-pane">
+    <!-- Stepper -->
+    <div class="stepper">
+      <div class="step-dot" data-panel="0" onclick="showPanel(0)">🔍 Scanner</div>
+      <div class="step-dot" data-panel="1" onclick="showPanel(1)">🌳 Parser</div>
+      <div class="step-dot" data-panel="2" onclick="showPanel(2)">🧠 Semantic Analyzer</div>
+      <div class="step-dot" data-panel="3" onclick="showPanel(3)">🦜 Output</div>
+    </div>
+
+    <!-- Panels -->
+    <div class="panels">
+      <!-- Lexi -->
+      <div class="panel" id="panel-scanner">
+        <div class="panel-header">
+          <span class="icon">🔍</span>
+          <div>
+            <div class="char-name">Scanner</div>
+            <div class="char-msg">Hi! I'm the Scanner, I break your code into tokens</div>
+          </div>
+        </div>
+        <div class="panel-body" id="scanner-body">
+          <span class="empty-msg">Run your code to see tokens.</span>
+        </div>
+      </div>
+
+      <!-- Pascal -->
+      <div class="panel" id="panel-parser">
+        <div class="panel-header">
+          <span class="icon">🌳</span>
+          <div>
+            <div class="char-name">Parser</div>
+            <div class="char-msg">I'm the Parser, I build the structure of your code</div>
+          </div>
+        </div>
+        <div class="panel-body" id="parser-body">
+          <span class="empty-msg">Run your code to see the AST.</span>
+        </div>
+      </div>
+
+      <!-- Sage -->
+      <div class="panel" id="panel-semantic">
+        <div class="panel-header">
+          <span class="icon">🧠</span>
+          <div>
+            <div class="char-name">Semantic Analyzer</div>
+            <div class="char-msg">I'm the Semantic Analyzer, I check if your code makes sense</div>
+          </div>
+        </div>
+        <div class="panel-body" id="semantic-body">
+          <span class="empty-msg">Run your code to see analysis.</span>
+        </div>
+      </div>
+
+      <!-- Output -->
+      <div class="panel" id="panel-output">
+        <div class="panel-header">
+          <span class="icon">🦜</span>
+          <div>
+            <div class="char-name">Cocobyte</div>
+            <div class="char-msg">Squawk! Here's what your code does:</div>
+          </div>
+        </div>
+        <div class="panel-body" id="output-body">
+          <span class="empty-msg">Run your code to see output.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Nav buttons -->
+    <div class="nav-buttons">
+      <button class="nav-btn" id="prev-btn" onclick="stepPanel(-1)" disabled>← Back</button>
+      <button class="nav-btn" id="next-btn" onclick="stepPanel(1)">Next →</button>
+    </div>
+  </section>
+</main>
+
+
+<script>
+// ─────────────────────────────────────────────
+// Examples
+// ─────────────────────────────────────────────
+const EXAMPLES = {
+  hello: `squawk("Hello, World!")`,
+
+  vars: `nest x = 10
+nest y = 32
+nest result = x + y
+squawk(result)
+squawk("The answer is:")
+squawk(x + y)`,
+
+  ifstmt: `nest age = 20
+peek age >= 18 then
+  squawk("You are an adult")
+land
+peek age < 18 then
+  squawk("You are a minor")
+land`,
+
+  fib: `teach fibonacci(n) then
+  peek n <= 1 then
+    give n
+  land
+  give fibonacci(n-1) + fibonacci(n-2)
+land
+squawk(fibonacci(10))`,
+
+  loop: `nest total = 0
+flap 5 times
+  nest total = total + 1
+  squawk(total)
+land
+squawk("Done!")`,
+
+  parrot: `squawk("                          .         ")
+squawk("                          | \\/|    ")
+squawk("  (\\   _                  ) )|/|   ")
+squawk("      (/            _----. /.'.'    ")
+squawk(".-._________..      .' @ _\\  .'   ")
+squawk("'.._______.   '.   /    (_| .')     ")
+squawk("  '._____.  /   '-/      | _.'      ")
+squawk("   '.______ (         ) ) \\        ")
+squawk("     '..____ '._       )  )         ")
+squawk("        .' __.--\\  , ,  // ((      ")
+squawk("        '.'  mrf|  \\/   (_.'(      ")
+squawk("                '   \\ .'           ")
+squawk("                 \\   (             ")
+squawk("                  \\   '.           ")
+squawk("                   \\ \\ '.)        ")
+squawk("                    '-'-'           ")`
+};
+
+document.getElementById('examples').addEventListener('change', function() {
+  const val = this.value;
+  if (val && EXAMPLES[val]) {
+    document.getElementById('editor').value = EXAMPLES[val];
+  }
+});
+
+// ─────────────────────────────────────────────
+// Panel state
+// ─────────────────────────────────────────────
+let currentPanel = 0;
+const panelIds = ['panel-scanner', 'panel-parser', 'panel-semantic', 'panel-output'];
+let hasData = false;
+
+function showPanel(index) {
+  if (!hasData) return;
+  currentPanel = Math.max(0, Math.min(3, index));
+  panelIds.forEach((id, i) => {
+    const el = document.getElementById(id);
+    el.classList.toggle('visible', i === currentPanel);
+  });
+  document.querySelectorAll('.step-dot').forEach((dot, i) => {
+    dot.classList.remove('active', 'done');
+    if (i === currentPanel) dot.classList.add('active');
+    else if (i < currentPanel) dot.classList.add('done');
+  });
+  document.getElementById('prev-btn').disabled = currentPanel === 0;
+  document.getElementById('next-btn').disabled = currentPanel === 3;
+
+  // Update next-btn color to match upcoming panel
+  const colors = ['var(--scanner)', 'var(--parser)', 'var(--semantic)', 'var(--coco)'];
+  document.getElementById('next-btn').style.borderColor = colors[currentPanel];
+  document.getElementById('next-btn').style.color = colors[currentPanel];
+}
+
+function stepPanel(delta) {
+  showPanel(currentPanel + delta);
+}
+
+// ─────────────────────────────────────────────
+// Run
+// ─────────────────────────────────────────────
+document.getElementById('run-btn').addEventListener('click', runCode);
+
+document.getElementById('editor').addEventListener('keydown', function(e) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    runCode();
+  }
+  // Tab inserts spaces
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const s = this.selectionStart, end = this.selectionEnd;
+    this.value = this.value.substring(0, s) + '  ' + this.value.substring(end);
+    this.selectionStart = this.selectionEnd = s + 2;
+  }
+});
+
+// ─────────────────────────────────────────────
+// Angry Parrot Sound
+// ─────────────────────────────────────────────
+function playAngryParrot() {
+  const audio = new Audio('angry_parrot_sound.mp3');
+  audio.volume = 1.0;
+  audio.play();
+}
+
+async function runCode() {
+  const code = document.getElementById('editor').value;
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Running…';
+
+  // Show loading state on lexi panel
+  document.getElementById('scanner-body').innerHTML = '<div class="loading"><div class="spinner"></div>Analyzing…</div>';
+  hasData = true;
+  showPanel(0);
+
+  let result;
+  try {
+    const resp = await fetch('http://127.0.0.1:5000/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code })
+    });
+    result = await resp.json();
+  } catch (err) {
+    result = {
+      tokens: [],
+      ast: {},
+      semantic: { ok: false, issues: [{ type: 'error', message: 'Cannot connect to backend. Is app.py running?', line: 0 }] },
+      output: [],
+      error: 'Cannot connect to backend. Run: python app.py'
+    };
+  }
+
+  btn.disabled = false;
+  btn.textContent = '▶ Run';
+
+  renderTokens(result.tokens || [], result.error);
+  renderAST(result.ast || {});
+  renderSemantic(result.semantic || { ok: false, issues: [] }, result.error);
+  renderOutput(result.output || [], result.error);
+
+  // Angry parrot if anything went wrong
+  if (result.error || (result.semantic && !result.semantic.ok)) {
+    playAngryParrot();
+  }
+
+  showPanel(0);
+}
+
+// ─────────────────────────────────────────────
+// Render: Tokens
+// ─────────────────────────────────────────────
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function renderTokens(tokens, error) {
+  const body = document.getElementById('scanner-body');
+  if (error && tokens.length === 0) {
+    body.innerHTML = `<div class="output-error">${escapeHtml(error)}</div>`;
+    return;
+  }
+  if (tokens.length === 0) {
+    body.innerHTML = '<span class="empty-msg">No tokens found.</span>';
+    return;
+  }
+  // Filter out EOF for display
+  const display = tokens.filter(t => t.type !== 'EOF');
+  let html = `<table class="token-table">
+    <thead><tr><th>#</th><th>Type</th><th>Value</th><th>Line</th></tr></thead>
+    <tbody>`;
+  display.forEach((t, i) => {
+    const badgeClass = 'badge badge-' + t.type;
+    const val = t.type === 'STRING' ? `"${escapeHtml(t.value)}"` : escapeHtml(String(t.value));
+    html += `<tr>
+      <td style="color:var(--muted);font-size:0.75rem">${i + 1}</td>
+      <td><span class="${badgeClass}">${escapeHtml(t.type)}</span></td>
+      <td>${val}</td>
+      <td style="color:var(--muted)">${t.line}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  body.innerHTML = html;
+}
+
+// ─────────────────────────────────────────────
+// Render: AST (SVG tree)
+// ─────────────────────────────────────────────
+const NODE_W = 90;
+const NODE_H = 32;
+const H_GAP = 18;
+const V_GAP = 60;
+const PAD = 20;
+
+function getChildren(node) {
+  if (!node || typeof node !== 'object') return [];
+  switch (node.node) {
+    case 'Program':     return node.body || [];
+    case 'Assign':      return node.value ? [node.value] : [];
+    case 'Print':       return node.args || [];
+    case 'If':          return [node.condition, ...(node.body || [])];
+    case 'Loop':        return [node.count, ...(node.body || [])];
+    case 'FunctionDef': return node.body || [];
+    case 'Return':      return node.value ? [node.value] : [];
+    case 'BinOp':       return [node.left, node.right].filter(Boolean);
+    case 'UnaryOp':     return node.operand ? [node.operand] : [];
+    case 'Call':        return node.args || [];
+    default:            return [];
+  }
+}
+
+function nodeLabel(node) {
+  if (!node || !node.node) return '?';
+  switch (node.node) {
+    case 'Number':     return String(node.value);
+    case 'String':     return `"${node.value.length > 8 ? node.value.slice(0,7)+'…' : node.value}"`;
+    case 'Bool':       return String(node.value);
+    case 'Identifier': return node.name;
+    case 'BinOp':      return node.op;
+    case 'UnaryOp':    return node.op;
+    case 'Assign':     return `nest ${node.name}`;
+    case 'Call':       return `${node.name}()`;
+    case 'FunctionDef':return `teach\n${node.name}`;
+    case 'If':         return 'peek';
+    case 'Loop':       return 'flap';
+    case 'Return':     return 'give';
+    case 'Print':      return 'squawk';
+    case 'Program':    return 'Program';
+    default:           return node.node;
+  }
+}
+
+function nodeColor(node) {
+  if (!node) return '#8b949e';
+  switch (node.node) {
+    case 'FunctionDef':
+    case 'Return':
+    case 'Call':       return '#f0883e';
+    case 'If':
+    case 'Loop':       return '#a371f7';
+    case 'Assign':
+    case 'Program':    return '#388bfd';
+    case 'BinOp':
+    case 'UnaryOp':    return '#3fb950';
+    default:           return '#8b949e';
+  }
+}
+
+function measureTree(node) {
+  const children = getChildren(node);
+  if (children.length === 0) {
+    node.__w = NODE_W;
+    return node.__w;
+  }
+  let total = 0;
+  children.forEach((c, i) => {
+    total += measureTree(c);
+    if (i < children.length - 1) total += H_GAP;
+  });
+  node.__w = Math.max(NODE_W, total);
+  return node.__w;
+}
+
+function positionTree(node, x, y) {
+  node.__x = x + node.__w / 2;
+  node.__y = y;
+  const children = getChildren(node);
+  let cx = x;
+  children.forEach(child => {
+    positionTree(child, cx, y + NODE_H + V_GAP);
+    cx += child.__w + H_GAP;
+  });
+}
+
+function collectNodes(node, nodes) {
+  nodes.push(node);
+  getChildren(node).forEach(c => collectNodes(c, nodes));
+}
+
+function renderASTSvg(root) {
+  measureTree(root);
+  positionTree(root, PAD, PAD + NODE_H / 2);
+
+  const all = [];
+  collectNodes(root, all);
+
+  const maxX = Math.max(...all.map(n => n.__x + NODE_W / 2)) + PAD;
+  const maxY = Math.max(...all.map(n => n.__y + NODE_H / 2)) + PAD;
+
+  let edges = '';
+  let nodes = '';
+
+  function draw(node) {
+    const children = getChildren(node);
+    children.forEach(child => {
+      edges += `<line x1="${node.__x}" y1="${node.__y + NODE_H/2}" x2="${child.__x}" y2="${child.__y - NODE_H/2}" stroke="#30363d" stroke-width="1.5"/>`;
+      draw(child);
+    });
+
+    const color = nodeColor(node);
+    const label = nodeLabel(node);
+    const lines = label.split('\n');
+    const rx = node.__x - NODE_W / 2;
+    const ry = node.__y - NODE_H / 2;
+
+    nodes += `<rect x="${rx}" y="${ry}" width="${NODE_W}" height="${NODE_H}" rx="6"
+      fill="${color}22" stroke="${color}" stroke-width="1.5"/>`;
+
+    if (lines.length === 1) {
+      nodes += `<text x="${node.__x}" y="${node.__y + 5}" fill="${color}"
+        text-anchor="middle" font-size="11" font-family="monospace">${escapeXml(label)}</text>`;
+    } else {
+      lines.forEach((line, i) => {
+        const dy = node.__y - 5 + i * 13;
+        nodes += `<text x="${node.__x}" y="${dy}" fill="${color}"
+          text-anchor="middle" font-size="10" font-family="monospace">${escapeXml(line)}</text>`;
+      });
+    }
+  }
+
+  draw(root);
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${maxX} ${maxY}" width="${maxX}" height="${maxY}">
+    ${edges}${nodes}
+  </svg>`;
+}
+
+function escapeXml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function renderAST(ast) {
+  const body = document.getElementById('parser-body');
+  if (!ast || !ast.node) {
+    body.innerHTML = '<span class="empty-msg">No AST available.</span>';
+    return;
+  }
+  if (!ast.body || ast.body.length === 0) {
+    body.innerHTML = '<span class="empty-msg">Empty program — no AST to show.</span>';
+    return;
+  }
+  try {
+    const svg = renderASTSvg(JSON.parse(JSON.stringify(ast))); // deep clone to avoid __w/__x pollution
+    body.innerHTML = `<div id="ast-container">${svg}</div>`;
+  } catch (e) {
+    body.innerHTML = `<span class="empty-msg">Could not render AST: ${escapeHtml(e.message)}</span>`;
+  }
+}
+
+// ─────────────────────────────────────────────
+// Render: Semantic
+// ─────────────────────────────────────────────
+function renderSemantic(semantic, globalError) {
+  const body = document.getElementById('semantic-body');
+  if (globalError && (!semantic.issues || semantic.issues.length === 0)) {
+    body.innerHTML = `<div class="output-error">${escapeHtml(globalError)}</div>`;
+    return;
+  }
+  if (semantic.ok && semantic.issues.length === 0) {
+    body.innerHTML = `<div class="sem-ok">✅ All checks passed — your code looks good!</div>`;
+    return;
+  }
+  if (semantic.ok && semantic.issues.length > 0) {
+    let html = `<div class="sem-ok" style="margin-bottom:12px">✅ No errors — but ${semantic.issues.length} warning(s)</div>`;
+    html += renderIssues(semantic.issues);
+    body.innerHTML = html;
+    return;
+  }
+  let html = `<div style="color:#f85149;font-weight:700;margin-bottom:12px;font-size:0.9rem">
+    ❌ Found ${semantic.issues.filter(i=>i.type==='error').length} error(s)
+  </div>`;
+  html += renderIssues(semantic.issues);
+  body.innerHTML = html;
+}
+
+function renderIssues(issues) {
+  return issues.map(issue => `
+    <div class="sem-issue ${issue.type}">
+      <span class="badge-type">${issue.type.toUpperCase()}</span>
+      <div>
+        <div>${escapeHtml(issue.message)}</div>
+        ${issue.line ? `<div class="line-num">Line ${issue.line}</div>` : ''}
+      </div>
+    </div>`).join('');
+}
+
+// ─────────────────────────────────────────────
+// Render: Output
+// ─────────────────────────────────────────────
+function renderOutput(lines, error) {
+  const body = document.getElementById('output-body');
+  if (error) {
+    body.innerHTML = `<div class="output-error">Runtime Error:<br>${escapeHtml(error)}</div>`;
+    return;
+  }
+  if (lines.length === 0) {
+    body.innerHTML = '<span class="empty-msg">No output produced. Try adding squawk(...)</span>';
+    return;
+  }
+  const html = lines.map(l => `<div class="output-line">${escapeHtml(String(l))}</div>`).join('');
+  body.innerHTML = `<div class="output-lines">${html}</div>`;
+}
+
+</script>
+</body>
+</html>
